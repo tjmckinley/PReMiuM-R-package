@@ -2243,6 +2243,13 @@ void writePReMiuMOutput(mcmcSampler<pReMiuMParams,pReMiuMOptions,pReMiuMPropPara
 		if(covariateType.compare("Discrete")==0||covariateType.compare("Mixed")==0){
 			nCategories = params.nCategories();
 		}
+		// check for any missing covariates
+		unsigned int missCov = 0;
+		for(unsigned int i = 0; i < nSubjects; i++) {
+		    if(sampler.model().dataset().nContinuousCovariatesNotMissing(i) < nCovariates) {
+		        missCov++;
+	        }
+		}
 
 		// Check if the files are already open
 		if(outFiles.size()==0){
@@ -2297,6 +2304,11 @@ void writePReMiuMOutput(mcmcSampler<pReMiuMParams,pReMiuMOptions,pReMiuMPropPara
 					outFiles.push_back(new ofstream(fileName.c_str()));
 
 				}
+				// if there are some missing covariates then set up output file
+		        if(missCov > 0) {
+		            fileName = fileStem + "_missingX.txt";
+			        outFiles.push_back(new ofstream(fileName.c_str()));
+			    }
 
 			}else if(covariateType.compare("Mixed")==0){
 				fileName = fileStem + "_phi.txt";
@@ -2422,7 +2434,7 @@ void writePReMiuMOutput(mcmcSampler<pReMiuMParams,pReMiuMOptions,pReMiuMPropPara
 
 		// File indices
 		int nClustersInd=-1,psiInd=-1,phiInd=-1,muInd=-1,SigmaInd=-1,R1Ind=-1,zInd=-1,entropyInd=-1,alphaInd=-1,kappa1Ind=-1,mu00Ind=-1, Sigma00Ind = -1;
-		int logPostInd = -1, nMembersInd = -1, alphaPropInd = -1, kappa1PropInd = -1, SigmaRInd = -1, SigmaSInd = -1, SigmaSPropInd = -1;
+		int logPostInd = -1, nMembersInd = -1, alphaPropInd = -1, kappa1PropInd = -1, missCovInd = -1, SigmaRInd = -1, SigmaSInd = -1, SigmaSPropInd = -1;
 		int thetaInd=-1,betaInd=-1,thetaPropInd=-1,betaPropInd=-1,sigmaSqYInd=-1,nuInd=-1,epsilonInd=-1;
 		int sigmaEpsilonInd=-1,epsilonPropInd=-1,omegaInd=-1,rhoInd=-1;
 		int rhoOmegaPropInd=-1,gammaInd=-1,nullPhiInd=-1,nullMuInd=-1;
@@ -2452,6 +2464,10 @@ void writePReMiuMOutput(mcmcSampler<pReMiuMParams,pReMiuMOptions,pReMiuMPropPara
 				kappa1Ind = r++;
 				kappa1PropInd = r++;
 			}
+			if(missCov > 0) {
+			    missCovInd = r++;
+			}
+			
 		}else if(covariateType.compare("Mixed")==0){
 			phiInd=r++;
 			muInd=r++;
@@ -2729,7 +2745,6 @@ void writePReMiuMOutput(mcmcSampler<pReMiuMParams,pReMiuMOptions,pReMiuMPropPara
 					}
 				}
 
-
 				*(outFiles[kappa1Ind]) << params.kappa11() << endl;
 
 				anyUpdates = proposalParams.kappa1AnyUpdates();
@@ -2740,7 +2755,21 @@ void writePReMiuMOutput(mcmcSampler<pReMiuMParams,pReMiuMOptions,pReMiuMPropPara
 				}
 
 			}
-
+			if(missCov > 0) {
+			    unsigned int missCovTrack = 0;
+			    for(unsigned int i = 0; i < nSubjects; i++) {
+				    if(sampler.model().dataset().nContinuousCovariatesNotMissing(i) < nCovariates) {
+				        missCovTrack++;
+					    for(unsigned int j = 0; j < nCovariates; j++) {
+				            *(outFiles[missCovInd]) << sampler.model().dataset().continuousX(i, j);
+				            if(missCovTrack < missCov || j < (nCovariates - 1)) {
+				                 *(outFiles[missCovInd]) << " ";
+				            }
+					    }
+					}
+				}
+	            *(outFiles[missCovInd]) << endl;
+	        }
 
 		}else if(covariateType.compare("Mixed")==0){
 			for(unsigned int j=0;j<nDiscreteCovs;j++){
