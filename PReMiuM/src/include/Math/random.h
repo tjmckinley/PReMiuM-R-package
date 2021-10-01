@@ -164,6 +164,100 @@ VectorXd multivarNormalRand(baseGeneratorType& rndGenerator,const VectorXd& mean
 
 }
 
+
+VectorXd condMultivarNormalRand(
+    baseGeneratorType& rndGenerator,
+    const VectorXd& meanVec,
+    const MatrixXd& covMat,
+    const VectorXd& currVals,
+    const VectorXi& missInd) {
+    
+    // extract vector size
+	unsigned int dimV = meanVec.size();
+	
+	// extract non-missing indices
+	unsigned int nmiss = missInd.size();
+	unsigned int nobs = dimV - nmiss;
+	VectorXi obsInd(nobs);
+	unsigned int i, j, k, l;
+	j = 0;
+	for(i = 0; i < dimV; i++) {
+	    l = 0; k = 0;
+	    while(k < nmiss && l == 0) {
+	        if(missInd(k) == i) {
+	            l++;
+	        }
+	        k++;
+	    }
+	    if(l == 0) {
+	        obsInd(j) = i;
+	    }
+	}
+	
+	// create subvectors and matrices
+	MatrixXd covMat11(nmiss, nmiss);
+	MatrixXd covMat12(nmiss, nobs);
+	MatrixXd covMat21(nobs, nmiss);
+	MatrixXd covMat22(nobs, nobs);
+	for(i = 0; i < nmiss; i++) {
+	    for(j = 0; j < nmiss; j++) {
+	        covMat11(i, j) = covMat(missInd(i), missInd(j));
+	    }
+	    for(j = 0; j < nobs; j++) {
+	        covMat12(i, j) = covMat(missInd(i), obsInd(j));
+	    }
+	}
+	for(i = 0; i < nobs; i++) {
+	    for(j = 0; j < nmiss; j++) {
+	        covMat21(i, j) = covMat(obsInd(i), missInd(j));
+	    }
+	    for(j = 0; j < nobs; j++) {
+	        covMat22(i, j) = covMat(obsInd(i), obsInd(j));
+	    }
+	}
+	
+	VectorXd meanVec1(nmiss);
+	VectorXd meanVec2(nobs);
+	VectorXd condVals(nobs);
+	for(i = 0; i < nmiss; i++) {
+	    meanVec1(i) = meanVec(missInd(i));
+	}
+	for(i = 0; i < nobs; i++) {
+	    meanVec2(i) = meanVec(obsInd(i));
+	    condVals(i) = currVals(obsInd(i));
+	}
+	
+	// calculate conditional covariance matrix
+	MatrixXd condCovMat = covMat11 - covMat12 * covMat22.inverse() * covMat21;
+	
+	// calculate conditional mean
+	VectorXd condMeanVec = meanVec1 + covMat12 * covMat22.inverse() * (condVals - meanVec2);
+
+	// Create a normal random generator
+	randomNormal normRand(0,1);
+
+	VectorXd V(nmiss);
+	for(i = 0; i < nmiss; i++){
+		V(i) = normRand(rndGenerator);
+	}
+
+	// Cholesky decomposition
+	LLT<MatrixXd> llt;
+	MatrixXd B = (llt.compute(condCovMat)).matrixL();
+	V = condMeanVec + B * V;
+	
+	// set return vector
+	VectorXd V1(dimV);
+	for(i = 0; i < nmiss; i++) {
+	    V1(missInd(i)) = V(i);
+	}
+	for(i = 0; i < nobs; i++) {
+	    V1(obsInd(i)) = condVals(i);
+	}
+	return V1;
+
+}
+
 MatrixXd wishartRand(baseGeneratorType& rndGenerator,const MatrixXd& R,const int& m){
 
 	// Cholesky decomposition

@@ -4742,21 +4742,50 @@ void updateMissingPReMiuMData(baseGeneratorType& rndGenerator,
 			}
 		}
 	}else if(covariateType.compare("Normal")==0){
-		for(unsigned int i=0;i<nSubjects;i++){
+		for(unsigned int i = 0; i < nSubjects; i++){
 			// Check if there is anything to do
-			if(dataset.nContinuousCovariatesNotMissing(i)<nCovariates){
+			if(dataset.nContinuousCovariatesNotMissing(i) < nCovariates){
 				int zi = params.z(i);
-				VectorXd newXi=multivarNormalRand(rndGenerator,params.workMuStar(zi),params.Sigma(zi));
-				for(unsigned int j=0;j<nCovariates;j++){
-					if(dataset.missingX(i,j)){
-						dataset.continuousX(i,j,newXi(j));
-						params.workContinuousX(i,j,newXi(j));
-					}else{
-						newXi(j)=dataset.continuousX(i,j);
-					}
+				int nmiss = nCovariates - dataset.nContinuousCovariatesNotMissing(i);
+				if(nmiss == nCovariates) {
+				    VectorXd newXi = multivarNormalRand(rndGenerator, params.workMuStar(zi), params.Sigma(zi));
+				    for(unsigned int j = 0; j < nCovariates; j++) {
+					    if(dataset.missingX(i, j)) {
+						    dataset.continuousX(i, j, newXi(j));
+						    params.workContinuousX(i, j, newXi(j));
+					    } else {
+						    printf("Shouldn't ever error here - something fundamentally wrong.");
+						    return;
+					    }
+				    }
+				    double logVal = logPdfMultivarNormal(nCovariates, newXi, params.workMuStar(zi), params.workSqrtTau(zi), params.workLogDetTau(zi));
+				    params.workLogPXiGivenZi(i, logVal);
+				} else {
+				    VectorXd currVals(params.workMuStar(zi).size());
+				    VectorXi missInd(nmiss);
+				    unsigned int k = 0;
+				    for(unsigned int j = 0; j < nCovariates; j++) {
+				        currVals(j) = dataset.continuousX(i, j);
+				        if(dataset.missingX(i, j)) {
+				            missInd(k) = j;
+				            k++;
+				        }
+				    }
+				    VectorXd newXi = condMultivarNormalRand(rndGenerator, params.workMuStar(zi), params.Sigma(zi), currVals, missInd);
+				    for(unsigned int j = 0; j < nCovariates; j++) {
+					    if(dataset.missingX(i, j)) {
+						    dataset.continuousX(i, j, newXi(j));
+						    params.workContinuousX(i, j, newXi(j));
+					    } else {
+						    if(newXi(j) != dataset.continuousX(i, j)) {
+						        printf("Again, something wrong in conditional updates %f %f\n", newXi(j), dataset.continuousX(i, j));
+						        return;
+						    }
+					    }
+				    }
+				    double logVal = logPdfMultivarNormal(nCovariates, newXi, params.workMuStar(zi), params.workSqrtTau(zi), params.workLogDetTau(zi));
+				    params.workLogPXiGivenZi(i, logVal);
 				}
-				double logVal = logPdfMultivarNormal(nCovariates,newXi,params.workMuStar(zi),params.workSqrtTau(zi),params.workLogDetTau(zi));
-				params.workLogPXiGivenZi(i,logVal);
 			}
 		}
 
